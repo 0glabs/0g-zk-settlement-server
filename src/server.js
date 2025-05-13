@@ -19,7 +19,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use(express.static(path.join(__dirname, '../public')));
 
-app.get('/sign-keypair', async (req, res) => {
+app.get('/sign-keypair', async (_, res) => {
     try {
         const { packPrivkey0, packPrivkey1, packedPubkey0, packedPubkey1 } = await genKeyPair();
         const responseBody = {
@@ -35,7 +35,7 @@ app.get('/sign-keypair', async (req, res) => {
 
 app.post('/signature', async (req, res) => {
     try {
-        const { requests, privkey } = req.body;
+        const { requests, privkey, isRequest } = req.body;
 
         // check required fields 
         if (!requests || !privkey) {
@@ -44,13 +44,15 @@ app.post('/signature', async (req, res) => {
 
         const requestInstances = requests.map(data => new Request(
             data.nonce,
-            data.fee,
+            data.reqFee,
             data.userAddress.toString(),
-            data.providerAddress.toString()
+            data.providerAddress.toString(),
+            data.requestHash.toString(),
+            data.resFee
         ));
         console.log("privkey:", privkey);
         const privkeyBigInt = [BigInt(privkey[0]), BigInt(privkey[1])];
-        const signatures = await signData(requestInstances, privkeyBigInt);
+        const signatures = await signData(requestInstances, privkeyBigInt, isRequest);
         const responseBody = {
             signatures: signatures
         };
@@ -64,7 +66,7 @@ app.post('/signature', async (req, res) => {
 
 app.post('/check-sign', async (req, res) => {
     try {
-        const { requests, pubkey, signatures } = req.body;
+        const { requests, pubkey, signatures, isRequest } = req.body;
 
         // check required fields
         if (!requests || !pubkey || !signatures) {
@@ -73,11 +75,13 @@ app.post('/check-sign', async (req, res) => {
 
         const requestInstances = requests.map(req => new Request(
             req.nonce,
-            req.fee,
+            req.reqFee,
             req.userAddress,
-            req.providerAddress
+            req.providerAddress,
+            req.requestHash,
+            req.resFee
         ));
-        const isValid = await verifySig(requestInstances, signatures, pubkey);
+        const isValid = await verifySig(requestInstances, signatures, pubkey, isRequest);
         res.setHeader('Content-Type', 'application/json');
         res.send(isValid);
     } catch (error) {
@@ -95,9 +99,11 @@ async function genProofInput(requestBody) {
     // to json
     const requestInstances = requests.map(req => new Request(
         req.nonce,
-        req.fee,
+        req.reqFee,
         req.userAddress,
-        req.providerAddress
+        req.providerAddress,
+        req.requestHash,
+        req.resFee
     ));
 
     return generateProofInput(requestInstances, l, pubkey, signatures);
@@ -218,7 +224,7 @@ app.get('/vkey', async (req, res) => {
     }
 });
 
-app.get('/verifier-contract', async (req, res) => {
+app.get('/verifier-contract', async (_, res) => {
     console.log('Generating verifier contract');
     try {
         const verifierCode = await woker.getVerifierContract();
@@ -230,7 +236,7 @@ app.get('/verifier-contract', async (req, res) => {
     }
 });
 
-app.get('/batch-verifier-contract', async (req, res) => {
+app.get('/batch-verifier-contract', async (_, res) => {
     console.log('Generating verifier contract');
     try {
         const verifierCode = await woker.getVerifierContract(true);

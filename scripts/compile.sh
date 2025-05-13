@@ -3,7 +3,7 @@
 CIRCUIT_PATH=./circuits
 BUILD_DIR=./build
 CIRCUIT_NAME=main
-PHASE1="$CIRCUIT_PATH"/pot19_final.ptau
+PHASE1="$CIRCUIT_PATH"/pot21_final.ptau
 
 if [ -f "$PHASE1" ]; then
     echo "Found Phase 1 ptau file"

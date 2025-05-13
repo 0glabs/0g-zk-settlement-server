@@ -2,4 +2,4 @@ pragma circom 2.0.0;
 
 include "./settle_eddsa.circom";
 
-component main {public [signer]}  = SettleTrace(40);
+component main {public [reqSigner, resSigner]}  = SettleTrace(40);
