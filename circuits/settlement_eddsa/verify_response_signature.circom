@@ -27,14 +27,9 @@ template ResponseSignatureVerify(traceLen) {
         verifier[i].msg <== serializedResponse[i];
     }
     
-    component packRequestHash[traceLen];
     component packFee[traceLen];
     for (i=0; i<traceLen; i++) {
-        packRequestHash[i] = Bytes2Num(requestHashBytesWidth);
         packFee[i] = Bytes2Num(costBytesWidth);
-        for (j=0; j<requestHashBytesWidth; j++) {
-            packRequestHash[i].in[j] <== serializedResponse[i][j];
-        }
         for (j=0; j<costBytesWidth; j++) {
             packFee[i].in[j] <== serializedResponse[i][requestHashBytesWidth + j];
         }
@@ -59,10 +54,8 @@ template ResponseSignatureVerify(traceLen) {
     packFlag.in <== sumFlag.out;
     packFlag.out === traceLen;
 
-    signal output requestHash[traceLen];
     signal output fee[traceLen];
     for (i=0; i<traceLen; i++) {
-        requestHash[i] <== packRequestHash[i].out;
         fee[i] <== packFee[i].out;
     }
 }

@@ -35,26 +35,27 @@ app.get('/sign-keypair', async (_, res) => {
 
 app.post('/signature', async (req, res) => {
     try {
-        const { requests, privkey, isRequest } = req.body;
+        const { requests, reqPrivkey, resPrivkey } = req.body;
 
         // check required fields 
-        if (!requests || !privkey) {
+        if (!requests || !reqPrivkey || !resPrivkey) {
             throw new Error('Missing required fields in request body');
         }
 
         const requestInstances = requests.map(data => new Request(
             data.nonce,
             data.reqFee,
-            data.userAddress.toString(),
-            data.providerAddress.toString(),
-            data.requestHash.toString(),
+            data.userAddress,
+            data.providerAddress,
+            data.requestHash,
             data.resFee
         ));
-        console.log("privkey:", privkey);
-        const privkeyBigInt = [BigInt(privkey[0]), BigInt(privkey[1])];
-        const signatures = await signData(requestInstances, privkeyBigInt, isRequest);
+        const reqPrivkeyBigInt = [BigInt(reqPrivkey[0]), BigInt(reqPrivkey[1])];
+        const resPrivkeyBigInt = [BigInt(resPrivkey[0]), BigInt(resPrivkey[1])];
+        const signatures = await signData(requestInstances, reqPrivkeyBigInt, resPrivkeyBigInt);
+        console.log('Signatures generated:', signatures);
         const responseBody = {
-            signatures: signatures
+            signatures: signatures,
         };
         res.setHeader('Content-Type', 'application/json');
         res.send(utils.jsonifyData(responseBody));
@@ -66,10 +67,10 @@ app.post('/signature', async (req, res) => {
 
 app.post('/check-sign', async (req, res) => {
     try {
-        const { requests, pubkey, signatures, isRequest } = req.body;
+        const { requests, reqPubkey, reqSignatures, resPubkey, resSignatures } = req.body;
 
         // check required fields
-        if (!requests || !pubkey || !signatures) {
+        if (!requests || !reqPubkey || !reqSignatures || !resPubkey || !resSignatures) {
             throw new Error('Missing required fields in request body');
         }
 
@@ -81,9 +82,12 @@ app.post('/check-sign', async (req, res) => {
             req.requestHash,
             req.resFee
         ));
-        const isValid = await verifySig(requestInstances, signatures, pubkey, isRequest);
+        const isValid = await verifySig(requestInstances, reqSignatures, reqPubkey, resSignatures, resPubkey);
+        const responseBody = {
+            isValid: isValid,
+        };
         res.setHeader('Content-Type', 'application/json');
-        res.send(isValid);
+        res.send(utils.jsonifyData(responseBody));
     } catch (error) {
         console.error('Get error when check signatures:', error);
         res.status(500).json({ error: error.message });
@@ -92,8 +96,8 @@ app.post('/check-sign', async (req, res) => {
 
 async function genProofInput(requestBody) {
     // check required fields
-    const { requests, l, pubkey, signatures } = requestBody;
-    if (!requests || !l || !pubkey || !signatures) {
+    const { requests, l, reqPubkey, reqSignatures, resPubkey, resSignatures } = requestBody;
+    if (!requests || !l || !reqPubkey || !reqSignatures || !resPubkey || !resSignatures) {
         throw new Error('Missing required fields in request body');
     }
     // to json
@@ -106,17 +110,20 @@ async function genProofInput(requestBody) {
         req.resFee
     ));
 
-    return generateProofInput(requestInstances, l, pubkey, signatures);
+    return generateProofInput(requestInstances, l, reqPubkey, reqSignatures, resPubkey, resSignatures);
 }
 
 app.post('/proof-input', async (req, res) => {
     try {
         const result = await genProofInput(req.body);
         const responseBody = {
-            serializedRequest: result.serializedRequest,
-            signer: result.signer,
-            r8: result.r8,
-            s: result.s
+            serializedInput: result.serializedInput,
+            reqSigner: result.reqSigner,
+            resSigner: result.resSigner,
+            reqR8: result.reqR8,
+            reqS: result.reqS,
+            resR8: result.resR8,
+            resS: result.resS
         };
         res.setHeader('Content-Type', 'application/json');
         res.send(utils.jsonifyData(responseBody, true));
