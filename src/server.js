@@ -35,12 +35,13 @@ app.get('/sign-keypair', async (_, res) => {
 
 app.post('/signature', async (req, res) => {
     try {
-        const { requests, reqPrivkey, resPrivkey } = req.body;
+        const { requests, privKey, signResponse } = req.body;
 
         // check required fields 
-        if (!requests || !reqPrivkey || !resPrivkey) {
+        if (!requests || !privKey || signResponse === undefined) {
             throw new Error('Missing required fields in request body');
         }
+
 
         const requestInstances = requests.map(data => new Request(
             data.nonce,
@@ -50,9 +51,8 @@ app.post('/signature', async (req, res) => {
             data.requestHash,
             data.resFee
         ));
-        const reqPrivkeyBigInt = [BigInt(reqPrivkey[0]), BigInt(reqPrivkey[1])];
-        const resPrivkeyBigInt = [BigInt(resPrivkey[0]), BigInt(resPrivkey[1])];
-        const signatures = await signData(requestInstances, reqPrivkeyBigInt, resPrivkeyBigInt);
+        const privKeyBigInt = [BigInt(privKey[0]), BigInt(privKey[1])];
+        const signatures = await signData(requestInstances, privKeyBigInt, signResponse);
         console.log('Signatures generated:', signatures);
         const responseBody = {
             signatures: signatures,
@@ -67,10 +67,10 @@ app.post('/signature', async (req, res) => {
 
 app.post('/check-sign', async (req, res) => {
     try {
-        const { requests, reqPubkey, reqSignatures, resPubkey, resSignatures } = req.body;
+        const { requests, pubKey, signatures, signResponse } = req.body;
 
         // check required fields
-        if (!requests || !reqPubkey || !reqSignatures || !resPubkey || !resSignatures) {
+        if (!requests || !pubKey || !signatures || signResponse === undefined) {
             throw new Error('Missing required fields in request body');
         }
 
@@ -82,12 +82,10 @@ app.post('/check-sign', async (req, res) => {
             req.requestHash,
             req.resFee
         ));
-        const isValid = await verifySig(requestInstances, reqSignatures, reqPubkey, resSignatures, resPubkey);
-        const responseBody = {
-            isValid: isValid,
-        };
+        const isValid = await verifySig(requestInstances, signatures, pubKey, signResponse);
+  
         res.setHeader('Content-Type', 'application/json');
-        res.send(utils.jsonifyData(responseBody));
+        res.send(isValid);
     } catch (error) {
         console.error('Get error when check signatures:', error);
         res.status(500).json({ error: error.message });
