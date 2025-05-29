@@ -59,7 +59,7 @@ RUN cargo install --git https://github.com/iden3/circom.git --rev 2eaaa6d --bin 
 # 激活 Python 环境，安装 Node.js 依赖并编译
 RUN source activate py38 && \
     cd circuits && \
-    wget -O pot19_final.ptau https://storage.googleapis.com/zkevm/ptau/powersOfTau28_hez_final_19.ptau && \
+    wget -O pot21_final.ptau https://storage.googleapis.com/zkevm/ptau/powersOfTau28_hez_final_21.ptau && \
     yarn install && \
     yarn compile && \
     yarn setup

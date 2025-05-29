@@ -17,7 +17,7 @@
     "fs-extra": "^10.0.0",
     "cors": "^2.8.5",
     "ffi-napi": "^4.0.3",
-    "zk-settlement-client": "../0g-zk-settlement-client"
+    "zk-settlement-client": "https://github.com/0glabs/0g-zk-settlement-client.git"
   },
   "devDependencies": {
     "@types/node": "^16.11.12",

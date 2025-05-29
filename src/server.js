@@ -42,7 +42,6 @@ app.post('/signature', async (req, res) => {
             throw new Error('Missing required fields in request body');
         }
 
-
         const requestInstances = requests.map(data => new Request(
             data.nonce,
             data.reqFee,
