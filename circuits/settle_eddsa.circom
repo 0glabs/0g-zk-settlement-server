@@ -5,6 +5,7 @@ include "./settlement_eddsa/commit_account.circom";
 include "./hasher/pedersen_bytes.circom";
 include "./settlement_eddsa/check_balance.circom";
 include "./settlement_eddsa/check_nonce.circom";
+include "./settlement_eddsa/commit_hasher.circom";
 include "./settlement_eddsa/verify_request_signature.circom";
 include "./settlement_eddsa/verify_response_signature.circom";
 include "./utils/bytes_to_num.circom";
@@ -23,10 +24,18 @@ template SettleTrace(l) {
 
     // request content
     // every settlment just process one account, so the reqSigner should be same
+
+    signal input serializedInput[l][requestBytesWidth + responseBytesWidth];
+    signal input pathElements[l];
+    signal input pathIndices[l];
+    signal input root;
+    signal input nullifierHash;
+    signal input nullifier;
+    signal input secret;
+
     signal input reqSigner[2];
     signal input reqR8[l][32];
     signal input reqS[l][32];
-    signal input serializedInput[l][requestBytesWidth + responseBytesWidth];
 
     signal input resSigner[2];
     signal input resR8[l][32];
@@ -73,12 +82,20 @@ template SettleTrace(l) {
     }
 
     // check nonce is valid
+    component hasher = CommitmentHasher();
+    hasher.nullifier <== nullifier;
+    hasher.secret <== secret;
+    hasher.nullifierHash === nullifierHash;
+
     component checkNonce = NonceCheck(l);
-    checkNonce.nonce <== reqSigVerifier.nonce;
-    signal output initNonce;
-    signal output finalNonce;
-    initNonce <== checkNonce.initNonce;
-    finalNonce <== checkNonce.finalNonce;
+    checkNonce.leaf <== hasher.commitment;
+    checkNonce.root <== root;
+    for (var i = 0; i < l; i++) {
+        checkNonce.pathElements[i] <== pathElements[i];
+        checkNonce.pathIndices[i] <== pathIndices[i];
+    }
+    signal output newRoot;
+    newRoot <== checkNonce.newRoot;
 
     // check balance trace is valid
     component checkBalance = BalanceCheck(l);
