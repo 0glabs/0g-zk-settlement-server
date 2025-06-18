@@ -30,27 +30,53 @@ template DualMux() {
 // Membership check
 // Verifies that merkle proof is correct for given merkle root and a leaf
 // pathIndices input is an array of 0/1 selectors telling whether given pathElement is on the left or right side of merkle path
-template NonceCheck(traceLen) {
-    signal input leaf;
-    signal input root;
-    signal input pathElements[traceLen];
-    signal input pathIndices[traceLen];
+template NonceCheck(traceLen, level) {
+    signal input leaves[traceLen];
+    signal input roots[2];
+    signal input pathElements[traceLen][level];
+    signal input pathIndices[traceLen][level];
 
-    component selectors[traceLen];
-    component hashers[traceLen];
+    component selectorsZero[traceLen][level];
+    component hashersZero[traceLen][level];
+    component selectors[traceLen][level];
+    component hashers[traceLen][level];
 
+    signal oldRoots[traceLen];
     for (var i = 0; i < traceLen; i++) {
-        selectors[i] = DualMux();
-        selectors[i].in[0] <== i == 0 ? leaf : hashers[i - 1].hash;
-        selectors[i].in[1] <== pathElements[i];
-        selectors[i].s <== pathIndices[i];
+        for (var j = 0; j < level; j++) {
+            selectorsZero[i][j] = DualMux();
+            selectorsZero[i][j].in[0] <== j == 0 ? 0 : hashersZero[i][j - 1].hash;
+            selectorsZero[i][j].in[1] <== pathElements[i][j];
+            selectorsZero[i][j].s <== pathIndices[i][j];
 
-        hashers[i] = HashLeftRight();
-        hashers[i].left <== selectors[i].out[0];
-        hashers[i].right <== selectors[i].out[1];
+            hashersZero[i][j] = HashLeftRight();
+            hashersZero[i][j].left <== selectorsZero[i][j].out[0];
+            hashersZero[i][j].right <== selectorsZero[i][j].out[1];
+        }
+        
+        if (i == 0) {
+            hashersZero[i][level - 1].hash === roots[0];
+        } else {
+            hashersZero[i][level - 1].hash === oldRoots[i - 1];
+        }
+
+        for (var j = 0; j < level; j++) {
+            selectors[i][j] = DualMux();
+            selectors[i][j].in[0] <== j == 0 ? leaves[i] : hashers[i][j - 1].hash;
+            selectors[i][j].in[1] <== pathElements[i][j];
+            selectors[i][j].s <== pathIndices[i][j];
+
+            hashers[i][j] = HashLeftRight();
+            hashers[i][j].left <== selectors[i][j].out[0];
+            hashers[i][j].right <== selectors[i][j].out[1];
+        }
+        oldRoots[i] <== hashers[i][level - 1].hash;
     }
 
-    root === hashers[traceLen - 1].hash;
+    roots[1] === hashers[traceLen - 1][level - 1].hash;
+
     signal output newRoot;
-    newRoot <== root;
+    signal output oldRoot;
+    oldRoot <== roots[0];
+    newRoot <== roots[1];
 }

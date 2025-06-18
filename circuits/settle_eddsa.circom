@@ -5,13 +5,12 @@ include "./settlement_eddsa/commit_account.circom";
 include "./hasher/pedersen_bytes.circom";
 include "./settlement_eddsa/check_balance.circom";
 include "./settlement_eddsa/check_nonce.circom";
-include "./settlement_eddsa/commit_hasher.circom";
 include "./settlement_eddsa/verify_request_signature.circom";
 include "./settlement_eddsa/verify_response_signature.circom";
 include "./utils/bytes_to_num.circom";
 
 // l: trace length
-template SettleTrace(l) {
+template SettleTrace(l, d) {
     var i;
     var j; 
     
@@ -26,12 +25,9 @@ template SettleTrace(l) {
     // every settlment just process one account, so the reqSigner should be same
 
     signal input serializedInput[l][requestBytesWidth + responseBytesWidth];
-    signal input pathElements[l];
-    signal input pathIndices[l];
-    signal input root;
-    signal input nullifierHash;
-    signal input nullifier;
-    signal input secret;
+    signal input pathElements[l][d];
+    signal input pathIndices[l][d];
+    signal input roots[2];
 
     signal input reqSigner[2];
     signal input reqR8[l][32];
@@ -81,21 +77,30 @@ template SettleTrace(l) {
         resSigVerifier.signer[16 + i] <== resUnpackSigner1.out[i];
     }
 
-    // check nonce is valid
-    component hasher = CommitmentHasher();
-    hasher.nullifier <== nullifier;
-    hasher.secret <== secret;
-    hasher.nullifierHash === nullifierHash;
+    // check nonces are valid
+    component checkNonce = NonceCheck(l, d);
+    component leaves[l];
+    component packNonce[l];
+    for (i=0; i<l; i++) {
+        leaves[i] = PedersenBytes(nonceBytesWidth);
+        for (j=0; j<nonceBytesWidth; j++) {
+            leaves[i].hashInput[j] <== serializedInput[i][j];
+        }
 
-    component checkNonce = NonceCheck(l);
-    checkNonce.leaf <== hasher.commitment;
-    checkNonce.root <== root;
-    for (var i = 0; i < l; i++) {
-        checkNonce.pathElements[i] <== pathElements[i];
-        checkNonce.pathIndices[i] <== pathIndices[i];
+        packNonce[i] = Bytes2Num(requestHashBytesWidth);
+        for (j=0; j<32; j++) {
+            packNonce[i].in[j] <== leaves[i].hashOutput[j];
+        }
+        checkNonce.leaves[i] <== packNonce[i].out;
     }
+    checkNonce.roots <== roots;
+    checkNonce.pathElements <== pathElements;
+    checkNonce.pathIndices <== pathIndices;
+    
     signal output newRoot;
+    signal output oldRoot;
     newRoot <== checkNonce.newRoot;
+    oldRoot <== checkNonce.oldRoot;
 
     // check balance trace is valid
     component checkBalance = BalanceCheck(l);

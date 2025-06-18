@@ -3,3 +3,4 @@ node_modules/
 pot*.ptau
 target/
 zk_settlement_env/
+.env

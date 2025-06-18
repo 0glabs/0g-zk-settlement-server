@@ -17,7 +17,7 @@
     "ffi-napi": "^4.0.3",
     "fs-extra": "^10.0.0",
     "snarkjs": "^0.7.0",
-    "zk-settlement-client": "https://github.com/0glabs/0g-zk-settlement-client.git"
+    "zk-settlement-client": "../0g-zk-settlement-client"
   },
   "devDependencies": {
     "@types/node": "^16.11.12",

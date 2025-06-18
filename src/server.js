@@ -4,11 +4,12 @@ const cors = require('cors');
 const http = require('http');
 const https = require('https');
 const fs = require('fs');
+const merkleTree = require('fixed-merkle-tree');
 const woker = require('./core/prove_verify');
 const utils = require('zk-settlement-client/src/common/utils');
 const { genKeyPair, signData } = require('zk-settlement-client/src/client');
 const { callRustFunction } = require('./core/rust_engine_wrapper');
-const { verifySig, generateProofInput } = require('zk-settlement-client/src/common/helper')
+const { verifySig, generateProofInput, calculateNonceHash, generateMerkleProofBatch } = require('zk-settlement-client/src/common/helper')
 const { Request } = require('zk-settlement-client/src/common/request');
 
 
@@ -107,7 +108,18 @@ async function genProofInput(requestBody) {
         req.resFee
     ));
 
-    return generateProofInput(requestInstances, l, reqPubkey, reqSignatures, resPubkey, resSignatures);
+    // verify that the nonces are not in the database
+    const dbPool = requestBody.dbPool || app.locals.db;
+    if (!dbPool) {
+        throw new Error('Database connection pool is not initialized');
+    }
+
+    const tree = app.locals.tree;
+    if (!tree) {
+        throw new Error('Merkle tree is not initialized');
+    }
+
+    return generateProofInput(requestInstances, l, reqPubkey, reqSignatures, resPubkey, resSignatures, tree);
 }
 
 app.post('/proof-input', async (req, res) => {
@@ -219,6 +231,29 @@ app.post('/solidity-calldata-combined', async (req, res) => {
     }
 });
 
+app.post('/save-nonces', async (req, res) => {
+    try {
+        const { nonces } = req.body;
+        if (!nonces || !Array.isArray(nonces)) {
+            return res.status(400).json({ error: 'Invalid nonces format' });
+        }
+        // save db
+        const dbPool = req.app.locals.db;
+        const placeholders = nonces.map(() => '(?)').join(',');
+        // 3) single SQL
+        const sql = `
+            INSERT INTO nonces (leaf)
+            VALUES ${placeholders}
+        `;
+        // 4) execute it
+        const [result] = await dbPool.execute(sql, nonces);
+        console.log(`Inserted/updated ${result.affectedRows} rows`);
+    } catch (error) {
+        console.error('Error saving nonces:', error);
+        res.status(500).json({ error: 'Failed to save nonces' });
+    }
+});
+
 app.get('/vkey', async (req, res) => {
     try {
         const vKey = await woker.getVerificationKey();
@@ -270,8 +305,62 @@ function handleError(res, error) {
     });
 }
 
+// async init function for DB
+async function initDb() {
+    dbPool = mysql.createPool({
+        host:     process.env.DB_HOST     || 'localhost',
+        user:     process.env.DB_USER     || 'root',
+        password: process.env.DB_PASS     || 'root',
+        database: process.env.DB_NAME     || 'nonces',
+        waitForConnections: true,
+    });
+    // optional: test a connection
+    await dbPool.getConnection();
+    console.log('✅ MySQL pool created');
+
+    // Create tables if they do not exist
+    const createTableQuery = `
+        CREATE TABLE IF NOT EXISTS nonces (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            leaf VARCHAR(255) NOT NULL UNIQUE,
+        );
+    `;
+    await dbPool.query(createTableQuery);
+    console.log('✅ Nonces table created or already exists');
+    return dbPool;
+}
+
+async function initTree(dbPool) {
+    const fetchAllNoncesQuery = 'SELECT leaf FROM nonces';
+    const [rows] = await dbPool.query(fetchAllNoncesQuery);
+    if (rows.length === 0) {
+        console.log('No nonces found in the database, initializing Merkle tree with empty root');
+    }
+    const tree = new merkleTree.MerkleTree(process.env.TREE_DEPTH, []);
+    const leaves = rows.map(row => row.leaf);
+    for (let i = 0; i < leaves.length; i++) {
+        const leaf = await calculateNonceHash(leaves[i]);
+        const leafIndex = first20BytesToBigInt(leaf, tree.capacity());
+        await tree.update(leafIndex, leaf);
+    }
+    
+    console.log('Merkle tree initialized with root:', tree.getRoot().toString('hex'));
+    return tree;
+}
+
 async function startServer() {
     try {
+
+        // Initialize database connection pool
+        const dbPool = await initDb();
+        console.log('✅ Database connection pool initialized');
+        app.locals.db = dbPool;
+
+        // Initialize Merkle tree
+        const tree = await initTree(dbPool);
+        console.log('✅ Merkle tree initialized');
+        app.locals.tree = tree;
+
         process.env.RUST_LOG = 'info';
         console.log('Initializing server...');
 
