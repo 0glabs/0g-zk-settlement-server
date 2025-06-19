@@ -31,10 +31,13 @@ template DualMux() {
 // Verifies that merkle proof is correct for given merkle root and a leaf
 // pathIndices input is an array of 0/1 selectors telling whether given pathElement is on the left or right side of merkle path
 template NonceCheck(traceLen, level) {
+    var i;
+    var j;
     signal input leaves[traceLen];
     signal input roots[2];
     signal input pathElements[traceLen][level];
     signal input pathIndices[traceLen][level];
+    signal input packFee[traceLen];
 
     component selectorsZero[traceLen][level];
     component hashersZero[traceLen][level];
@@ -42,8 +45,10 @@ template NonceCheck(traceLen, level) {
     component hashers[traceLen][level];
 
     signal oldRoots[traceLen];
-    for (var i = 0; i < traceLen; i++) {
-        for (var j = 0; j < level; j++) {
+    component rootMatches[traceLen];
+
+    for (i = 0; i < traceLen; i++) {
+        for (j = 0; j < level; j++) {
             selectorsZero[i][j] = DualMux();
             selectorsZero[i][j].in[0] <== j == 0 ? 0 : hashersZero[i][j - 1].hash;
             selectorsZero[i][j].in[1] <== pathElements[i][j];
@@ -53,14 +58,16 @@ template NonceCheck(traceLen, level) {
             hashersZero[i][j].left <== selectorsZero[i][j].out[0];
             hashersZero[i][j].right <== selectorsZero[i][j].out[1];
         }
-        
+        rootMatches[i] = IsEqual();
+        rootMatches[i].in[0] <== hashersZero[i][level - 1].hash;
+
         if (i == 0) {
-            hashersZero[i][level - 1].hash === roots[0];
+            rootMatches[i].in[1] <== roots[0];
         } else {
-            hashersZero[i][level - 1].hash === oldRoots[i - 1];
+            rootMatches[i].in[1] <== oldRoots[i - 1];
         }
 
-        for (var j = 0; j < level; j++) {
+        for (j = 0; j < level; j++) {
             selectors[i][j] = DualMux();
             selectors[i][j].in[0] <== j == 0 ? leaves[i] : hashers[i][j - 1].hash;
             selectors[i][j].in[1] <== pathElements[i][j];
@@ -72,6 +79,25 @@ template NonceCheck(traceLen, level) {
         }
         oldRoots[i] <== hashers[i][level - 1].hash;
     }
+
+    component feeIsZero[traceLen];
+    component sigValidOrFeeAllZero[traceLen];
+    component sumFlag = BinSum(1, traceLen);
+    for (i=0; i<traceLen; i++) {
+        feeIsZero[i] = IsZero();
+        feeIsZero[i].in <== packFee[i];
+        
+        sigValidOrFeeAllZero[i] = OR();
+        sigValidOrFeeAllZero[i].a <== rootMatches[i].out;
+        sigValidOrFeeAllZero[i].b <== feeIsZero[i].out;
+
+        sumFlag.in[i][0] <== sigValidOrFeeAllZero[i].out;
+    }
+
+    var sumFlagOutBits = nbits((2**1 -1)*traceLen);
+    component packFlag = Bits2Num(sumFlagOutBits);
+    packFlag.in <== sumFlag.out;
+    packFlag.out === traceLen;
 
     roots[1] === hashers[traceLen - 1][level - 1].hash;
 

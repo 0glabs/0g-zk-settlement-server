@@ -9,7 +9,7 @@ const woker = require('./core/prove_verify');
 const utils = require('zk-settlement-client/src/common/utils');
 const { genKeyPair, signData } = require('zk-settlement-client/src/client');
 const { callRustFunction } = require('./core/rust_engine_wrapper');
-const { verifySig, generateProofInput, calculateNonceHash, generateMerkleProofBatch } = require('zk-settlement-client/src/common/helper')
+const { verifySig, generateProofInput, calculateNonceHash } = require('zk-settlement-client/src/common/helper')
 const { Request } = require('zk-settlement-client/src/common/request');
 
 

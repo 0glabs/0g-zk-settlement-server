@@ -96,6 +96,7 @@ template SettleTrace(l, d) {
     checkNonce.roots <== roots;
     checkNonce.pathElements <== pathElements;
     checkNonce.pathIndices <== pathIndices;
+    checkNonce.packFee <== reqSigVerifier.fee;
     
     signal output newRoot;
     signal output oldRoot;
