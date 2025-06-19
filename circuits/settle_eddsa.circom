@@ -87,9 +87,9 @@ template SettleTrace(l, d) {
             leaves[i].hashInput[j] <== serializedInput[i][j];
         }
 
-        packNonce[i] = Bytes2Num(requestHashBytesWidth);
-        for (j=0; j<32; j++) {
-            packNonce[i].in[j] <== leaves[i].hashOutput[j];
+        packNonce[i] = Bytes2Num(20);
+        for (j=0; j<20; j++) {
+            packNonce[i].in[j] <== leaves[i].hashOutput[19 - j];
         }
         checkNonce.leaves[i] <== packNonce[i].out;
     }
@@ -97,7 +97,7 @@ template SettleTrace(l, d) {
     checkNonce.pathElements <== pathElements;
     checkNonce.pathIndices <== pathIndices;
     checkNonce.packFee <== reqSigVerifier.fee;
-    
+
     signal output newRoot;
     signal output oldRoot;
     newRoot <== checkNonce.newRoot;

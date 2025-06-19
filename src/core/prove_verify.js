@@ -84,8 +84,6 @@ async function getSolidityCalldata(inputs) {
 }
 
 function parseCalldataString(calldataStr) {
-    console.log("Input string:", calldataStr);
-
     const regex = /\[((?:[^\[\]]+|\[[^\[\]]*\])*)\]/g;
     const matches = [];
     let match;
@@ -126,9 +124,6 @@ function parseCalldataString(calldataStr) {
         pC: pC,
         pubInputs: pubInputs
     };
-
-    console.log("Parsed result:", JSON.stringify(result, null, 2));
-
     return result;
 }
 
