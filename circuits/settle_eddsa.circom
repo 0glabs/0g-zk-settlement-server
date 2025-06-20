@@ -10,7 +10,7 @@ include "./settlement_eddsa/verify_response_signature.circom";
 include "./utils/bytes_to_num.circom";
 
 // l: trace length
-template SettleTrace(l) {
+template SettleTrace(l, d) {
     var i;
     var j; 
     
@@ -23,10 +23,15 @@ template SettleTrace(l) {
 
     // request content
     // every settlment just process one account, so the reqSigner should be same
+
+    signal input serializedInput[l][requestBytesWidth + responseBytesWidth];
+    signal input pathElements[l][d];
+    signal input pathIndices[l][d];
+    signal input roots[2];
+
     signal input reqSigner[2];
     signal input reqR8[l][32];
     signal input reqS[l][32];
-    signal input serializedInput[l][requestBytesWidth + responseBytesWidth];
 
     signal input resSigner[2];
     signal input resR8[l][32];
@@ -72,13 +77,31 @@ template SettleTrace(l) {
         resSigVerifier.signer[16 + i] <== resUnpackSigner1.out[i];
     }
 
-    // check nonce is valid
-    component checkNonce = NonceCheck(l);
-    checkNonce.nonce <== reqSigVerifier.nonce;
-    signal output initNonce;
-    signal output finalNonce;
-    initNonce <== checkNonce.initNonce;
-    finalNonce <== checkNonce.finalNonce;
+    // check nonces are valid
+    component checkNonce = NonceCheck(l, d);
+    component leaves[l];
+    component packNonce[l];
+    for (i=0; i<l; i++) {
+        leaves[i] = PedersenBytes(nonceBytesWidth);
+        for (j=0; j<nonceBytesWidth; j++) {
+            leaves[i].hashInput[j] <== serializedInput[i][j];
+        }
+
+        packNonce[i] = Bytes2Num(20);
+        for (j=0; j<20; j++) {
+            packNonce[i].in[j] <== leaves[i].hashOutput[19 - j];
+        }
+        checkNonce.leaves[i] <== packNonce[i].out;
+    }
+    checkNonce.roots <== roots;
+    checkNonce.pathElements <== pathElements;
+    checkNonce.pathIndices <== pathIndices;
+    checkNonce.packFee <== reqSigVerifier.fee;
+
+    signal output newRoot;
+    signal output oldRoot;
+    newRoot <== checkNonce.newRoot;
+    oldRoot <== checkNonce.oldRoot;
 
     // check balance trace is valid
     component checkBalance = BalanceCheck(l);

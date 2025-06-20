@@ -27,7 +27,7 @@ template SignatureVerify(traceLen) {
         verifier[i].A <== signer;
         verifier[i].msg <== serializedRequest[i];
     }
-    
+
     component packNonce[traceLen];
     component packFee[traceLen];
     component packUserAddress[traceLen];
@@ -50,18 +50,18 @@ template SignatureVerify(traceLen) {
             packProviderAddress[i].in[j] <== serializedRequest[i][nonceBytesWidth + balanceBytesWidth + addressBytesWidth + j];
         }
     }
-    
+
     component feeIsZero[traceLen];
     component sigValidOrFeeAllZero[traceLen];
     component sumFlag = BinSum(1, traceLen);
     for (i=0; i<traceLen; i++) {
         feeIsZero[i] = IsZero();
         feeIsZero[i].in <== packFee[i].out;
-        
+
         sigValidOrFeeAllZero[i] = OR();
         sigValidOrFeeAllZero[i].a <== verifier[i].result;
         sigValidOrFeeAllZero[i].b <== feeIsZero[i].out;
-        
+
         sumFlag.in[i][0] <== sigValidOrFeeAllZero[i].out;
     }
 
